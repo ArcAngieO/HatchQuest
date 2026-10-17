@@ -19,6 +19,8 @@ function prettyDate(str) { const [y, m, d] = str.split("-").map(Number); return 
 function daysUntil(str) { const [y, m, d] = str.split("-").map(Number); const t = new Date(); t.setHours(0, 0, 0, 0); return Math.round((new Date(y, m - 1, d) - t) / 86400000); }
 const creature = (id) => CREATURES.find((c) => c.id === id);
 const DROP_EGGS = ["Tidecaller", "Forest", "Candy", "Bloom", "Ember"];
+const BASE_EGG_XP = 300; // the standard egg; other eggs scale from it
+const eggNeed = (theme) => Math.max(1, Math.round(EGGS[theme].need * ((S?.hatchXp || BASE_EGG_XP) / BASE_EGG_XP)));
 const levelNeed = (l) => 150 + l * 50;
 
 /* ---------- save / load ---------- */
@@ -77,7 +79,7 @@ function gainXP(amount, feedEgg = true) {
     S.basket[LEVEL_UP_EGG] = (S.basket[LEVEL_UP_EGG] || 0) + 1; S.gems += GEM_REWARDS.levelUp;
     toast(`⭐ Level up! You're now <b>level ${S.level}</b>: +${reward} 🪙, +${GEM_REWARDS.levelUp} 💎 and a <b>${LEVEL_UP_EGG} Egg</b>!`);
   }
-  if (feedEgg && S.inc) { S.inc.xp = Math.min(S.inc.xp + amount, EGGS[S.inc.theme].need); }
+  if (feedEgg && S.inc) { S.inc.xp = Math.min(S.inc.xp + amount, eggNeed(S.inc.theme)); }
 }
 function loseXP(amount) { S.xp = Math.max(0, S.xp - amount); if (S.inc) S.inc.xp = Math.max(0, S.inc.xp - amount); }
 
@@ -140,7 +142,7 @@ function rollRarity(theme, lucky = false) {
   return "common";
 }
 function hatch() {
-  if (!S.inc || S.inc.xp < EGGS[S.inc.theme].need) return;
+  if (!S.inc || S.inc.xp < eggNeed(S.inc.theme)) return;
   const theme = S.inc.theme;
   if (S.boosts.pearl) { // Pearl of Choice: let the player pick from creatures they've discovered
     const known = CREATURES.filter((x) => x.egg === theme && S.pets.some((p) => p.cid === x.id));
@@ -196,7 +198,7 @@ function doSwap(theme) {
 function swapModal() {
   const e = EGGS[S.inc.theme];
   return `<div class="overlay" data-act="closebg"><div class="modal"><h2>⚠️ Swap eggs?</h2>
-    <p class="m">Your <b>${S.inc.theme} Egg</b> has <b>${S.inc.xp} / ${e.need} XP</b>. If you swap it for a ${ui.swapTo} Egg, it goes back to your basket and <b>all of that progress is lost</b>.</p>
+    <p class="m">Your <b>${S.inc.theme} Egg</b> has <b>${S.inc.xp} / ${eggNeed(S.inc.theme)} XP</b>. If you swap it for a ${ui.swapTo} Egg, it goes back to your basket and <b>all of that progress is lost</b>.</p>
     <div style="display:flex;align-items:center;justify-content:center;gap:20px;margin:6px 0 4px">${eggSVG(S.inc.theme, 60)}<span style="font-size:26px">→</span>${eggSVG(ui.swapTo, 60)}</div>
     <div class="mfoot"><button class="btn g" data-act="close">KEEP MY EGG</button><button class="btn" style="background:var(--red);color:#3a0010;box-shadow:0 5px 0 #a23a4c" data-act="swapok">SWAP & LOSE PROGRESS</button></div></div></div>`;
 }
@@ -208,7 +210,7 @@ function cheatModal() {
 }
 function feed(el) {
   if (!S.inc || (!S.cheats && S.coins < 30)) return toast("You need 30 🪙 to feed your egg.");
-  if (!S.cheats) S.coins -= 30; S.inc.xp = Math.min(S.inc.xp + 25, EGGS[S.inc.theme].need); floatAt(el, "+25 egg XP", "#ffd166"); commit();
+  if (!S.cheats) S.coins -= 30; S.inc.xp = Math.min(S.inc.xp + 25, eggNeed(S.inc.theme)); floatAt(el, "+25 egg XP", "#ffd166"); commit();
 }
 function completeQuest(id, el) {
   const q = S.quests.find((x) => x.id === id); if (!q) return;
@@ -274,7 +276,7 @@ function buy(id, el) {
   const it = SHOP_ITEMS.find((x) => x.id === id); if (!it) return;
   if (!S.cheats && S.gems < it.price) return toast(`You need ${it.price} 💎 for ${it.name}.`);
   if (id === "elixir" && !S.inc) return toast("Put an egg in the incubator first.");
-  if (id === "elixir" && S.inc.xp >= EGGS[S.inc.theme].need) return toast("Your egg is already ready to hatch!");
+  if (id === "elixir" && S.inc.xp >= eggNeed(S.inc.theme)) return toast("Your egg is already ready to hatch!");
   if (id === "lucky" && S.boosts.lucky) return toast("A Lucky Potion is already active.");
   if (id === "pearl" && S.boosts.pearl) return toast("You already have a Pearl of Choice waiting.");
   if (id === "tonic" && S.boosts.tonic === today()) return toast("Tide Tonic is already active today.");
@@ -286,7 +288,7 @@ function buy(id, el) {
   if (id === "tonic") S.boosts.tonic = today();
   if (id === "shield") S.items.shield++;
   if (id === "polish") S.items.polish++;
-  if (id === "elixir") S.inc.xp = EGGS[S.inc.theme].need;
+  if (id === "elixir") S.inc.xp = eggNeed(S.inc.theme);
   if (id === "egg") S.basket.Tidecaller = (S.basket.Tidecaller || 0) + 1;
   if (id === "coins") S.coins += 150;
   floatAt(el, `-${it.price} 💎`, "#7cc8ff"); toast(`${it.icon} Bought <b>${it.name}</b>`); commit();
@@ -351,12 +353,32 @@ function thumb(c, { size = 64, known = true, label = "", extra = "" } = {}) {
 }
 
 /* ---------- views ---------- */
+function buddyPet() { const p = S.pets.find((x) => x.uid === S.buddy); return p ? { p, c: creature(p.cid) } : null; }
+function buddyArt(b, which = "thumb") { // respects Selkie-style forms
+  const alt = b.c.altArt && b.p.form === "alt";
+  if (which === "thumb") return alt ? b.c.altThumb || b.c.altArt : thumbSrc(b.c);
+  return alt ? b.c.altArt : artSrc(b.c);
+}
+const BUDDY_LINES = ["is cheering you on!", "believes in you.", "wants to see that streak grow.", "is ready for today.", "thinks you're doing great.", "is napping, but proud of you."];
+function buddyCard() {
+  const b = buddyPet();
+  if (!b) return `<div class="card buddy"><div class="ch"><h3>BUDDY</h3></div><div class="empty">Hatch a creature and set it as your buddy to get bonus XP.</div></div>`;
+  const R = RARITIES[b.c.rarity]; const name = b.p.nick || b.c.name; const src = buddyArt(b, "full");
+  const line = BUDDY_LINES[(new Date().getDate() + b.c.name.length) % BUDDY_LINES.length];
+  const shiny = b.c.rarity === "legendary" || b.c.rarity === "mythical" || b.p.shiny || (b.c.mainShiny && b.p.form !== "alt");
+  return `<div class="card buddy" data-act="card" data-id="${b.c.id}" style="--acc:${R.color}">
+    <div class="buddyart${b.c.full && b.p.form !== "alt" ? " tall" : ""}" style="background:${EGGS[b.c.egg].scene}">${src ? imgTag(src, b.c) : `<span class="em">${b.c.emoji}</span>`}${shiny ? '<div class="holo"></div>' : ""}
+      <span class="bbadge">★ BUDDY</span></div>
+    <div class="buddyinfo"><div style="flex:1;min-width:0"><b>${esc(name)}</b><small>${esc(line)}</small></div>
+      <div class="bbonus" style="color:${R.color}">+${R.buddyXp}%<small>habit XP</small></div></div></div>`;
+}
 function topBar() {
-  const p = S.player; const need = levelNeed(S.level);
+  const p = S.player; const need = levelNeed(S.level); const bud = buddyPet();
   return `<div class="top">
     <div class="ava" style="background:${p.color}">${p.avatar}<div class="lv">${S.level}</div></div>
     <div class="who"><b>${esc(p.name)}</b><small>Habit Hero · Day ${Math.max(1, 1 - daysUntil(S.createdAt))} of your journey</small></div>
     <div class="xpw"><div class="xpl"><span>LV ${S.level}</span><span>${S.xp} / ${need} XP</span></div><div class="bar"><i style="width:${(S.xp / need) * 100}%"></i></div></div>
+    ${bud ? `<button class="buddychip" data-act="card" data-id="${bud.c.id}" title="Your buddy"><span class="bthumb">${buddyArt(bud) ? imgTag(buddyArt(bud), bud.c) : bud.c.emoji}</span><span><b>${esc(bud.p.nick || bud.c.name)}</b><small>buddy · +${RARITIES[bud.c.rarity].buddyXp}% XP</small></span></button>` : ""}
     <div class="res"><div class="pill">🔥 ${dayStreak()} day streak</div><div class="pill">🪙 ${S.cheats ? "∞" : S.coins.toLocaleString()}</div><div class="pill">💎 ${S.cheats ? "∞" : S.gems}</div>${S.cheats ? `<div class="pill" style="border-color:var(--xp);color:var(--xp)">🧪 Cheats</div>` : ""}</div>
   </div>`;
 }
@@ -387,7 +409,7 @@ function incubatorCard() {
     return `<div class="card inc"><div class="ch"><h3>INCUBATOR</h3><span>empty</span></div>
       <div class="empty" style="padding:40px 10px"><div style="font-size:40px">🪺</div><p style="margin-top:8px">${has ? "Pick an egg from your basket below to start incubating." : "No eggs yet! Finish homework quests to earn eggs."}</p></div></div>`;
   }
-  const e = EGGS[S.inc.theme]; const ready = S.inc.xp >= e.need; const pct = (S.inc.xp / e.need) * 100;
+  const e = EGGS[S.inc.theme]; const need = eggNeed(S.inc.theme); const ready = S.inc.xp >= need; const pct = Math.min(100, (S.inc.xp / need) * 100);
   const tiers = RARITY_ORDER.filter((r) => e.odds[r] > 0).reverse();
   const odds = tiers.map((r) => {
     const cs = CREATURES.filter((c) => c.egg === S.inc.theme && c.rarity === r); const R = RARITIES[r];
@@ -396,7 +418,7 @@ function incubatorCard() {
     return `<div class="od">${thumb(c, { size: 60, known: !!owned.length })}<b>${owned.length}/${cs.length} found</b><span class="rar" style="background:${R.color};color:${R.text}">${R.label}</span><span class="pc" style="color:${R.color}">${e.odds[r]}%</span></div>`;
   }).join("");
   const found = CREATURES.filter((c) => c.egg === S.inc.theme && S.pets.some((p) => p.cid === c.id)).length;
-  const toGo = e.need - S.inc.xp; const setSize = CREATURES.filter((c) => c.egg === S.inc.theme).length;
+  const toGo = need - S.inc.xp; const setSize = CREATURES.filter((c) => c.egg === S.inc.theme).length;
   return `<div class="card inc">
     <div class="ch"><h3>INCUBATOR</h3><span>Habits feed your egg</span></div>
     <div class="eggtop">
@@ -404,7 +426,7 @@ function incubatorCard() {
       <div class="einfo"><div class="tag">${S.inc.theme.toUpperCase()} EGG</div>
         <h2>${ready ? "It's hatching!" : pct > 60 ? "Something's wiggling…" : pct > 20 ? "It's getting warmer…" : "A brand new egg"}</h2>
         <p>Earned from: ${esc(S.inc.from)}</p>
-        <div style="width:250px;margin-top:10px"><div class="xpl"><span>${S.inc.xp}/${e.need} XP</span><span>${ready ? "READY!" : toGo + " TO GO"}</span></div><div class="bar gold"><i style="width:${pct}%"></i></div></div>
+        <div style="width:250px;margin-top:10px"><div class="xpl"><span>${Math.min(S.inc.xp, need)}/${need} XP</span><span>${ready ? "READY!" : toGo + " TO GO"}</span></div><div class="bar gold"><i style="width:${pct}%"></i></div></div>
         <div class="btns">${ready ? `<button class="btn green" data-act="hatch">HATCH!</button>` : `<button class="btn" data-act="feed">FEED 30🪙 → +25</button>`}${S.cheats && !ready ? `<button class="btn g" data-act="testhatch">⚡ INSTANT HATCH</button>` : ""}</div>
       </div>
     </div>
@@ -453,7 +475,7 @@ function collectionCard() {
 }
 
 function homePage() {
-  return topBar() + `<div class="grid"><div class="col">${habitsCard()}</div><div class="col">${incubatorCard()}${basketCard()}</div><div class="col">${questsCard()}${collectionCard()}</div></div>`;
+  return topBar() + `<div class="grid"><div class="col">${buddyCard()}${habitsCard()}</div><div class="col">${incubatorCard()}${basketCard()}</div><div class="col">${questsCard()}${collectionCard()}</div></div>`;
 }
 
 function petsPage() {
@@ -486,6 +508,11 @@ function settingsPage() {
       <div class="field"><label>Name</label><input class="inp" id="set-name" value="${esc(p.name)}" maxlength="24"></div>
       <div class="field"><label>Avatar</label><div class="chips">${AVATARS.map((a) => `<button class="chip emo ${a === p.avatar ? "on" : ""}" data-act="setavatar" data-v="${a}">${a}</button>`).join("")}</div></div>
       <div><button class="btn" data-act="savename">SAVE PROFILE</button></div></div></div>
+    <div class="card"><div class="ch"><h3>HATCH SPEED</h3><span>XP needed to hatch an egg</span></div><div class="form">
+      <p style="color:var(--mute);font-size:14px;line-height:1.5">How much XP a standard egg needs. Ember and Star eggs scale with it (they always take a bit longer).</p>
+      <div class="chips">${[["Speedy", 75], ["Quick", 150], ["Normal", 300], ["Patient", 450], ["Epic", 600]].map(([n, x]) => `<button class="chip ${(S.hatchXp || BASE_EGG_XP) === x ? "on" : ""}" data-act="hatchxp" data-v="${x}">${n}<br><span style="font-size:11px;color:var(--mute)">${x} XP</span></button>`).join("")}</div>
+      <div class="field"><label>Or set your own (10–5000)</label><div style="display:flex;gap:10px"><input class="inp" id="hatch-custom" type="number" min="10" max="5000" value="${S.hatchXp || BASE_EGG_XP}" style="max-width:140px"><button class="btn g" data-act="hatchxpcustom">SET</button></div></div>
+      <div class="hatchprev">${Object.keys(EGGS).map((k) => `<span>${eggSVG(k, 18)} ${k}: <b>${eggNeed(k)}</b></span>`).join("")}</div></div></div>
     <div class="card"><div class="ch"><h3>SAVE DATA</h3></div><div class="form">
       <p style="color:var(--mute);font-size:14px;line-height:1.5">Your progress saves automatically on this device every time something changes and when you close the app. Someone using a different device or browser starts their own fresh game.</p>
       <p style="color:var(--mute);font-size:14px;line-height:1.5">To move your progress to another device, export a backup file here and import it there.</p>
@@ -652,12 +679,14 @@ document.addEventListener("click", (e) => {
     case "delquest": S.quests = S.quests.filter((q) => q.id !== id); commit(); break;
     case "feed": feed(el); break;
     case "hatch": hatch(); break;
+    case "hatchxp": S.hatchXp = +v; toast(`🥚 Eggs now need ${eggNeed("Tidecaller")} XP`); commit(); break;
+    case "hatchxpcustom": { const n = Math.round(+document.getElementById("hatch-custom").value); if (!(n >= 10 && n <= 5000)) return toast("Pick a number from 10 to 5000."); S.hatchXp = n; toast(`🥚 Eggs now need ${eggNeed("Tidecaller")} XP`); commit(); break; }
     case "trade": ui.trade = autoPickTrade(); ui.modal = "trade"; render(); break;
     case "tr-auto": ui.trade = autoPickTrade(); render(); break;
     case "tr-plus": ui.trade[id] = (ui.trade[id] || 0) + 1; render(); break;
     case "tr-minus": ui.trade[id] = Math.max(0, (ui.trade[id] || 0) - 1); render(); break;
     case "tr-go": doTrade(); break;
-    case "testhatch": if (S.cheats && S.inc) { S.inc.xp = EGGS[S.inc.theme].need; hatch(); } break;
+    case "testhatch": if (S.cheats && S.inc) { S.inc.xp = eggNeed(S.inc.theme); hatch(); } break;
     case "cheatask": ui.modal = "cheat"; render(); break;
     case "cheaton": S.cheats = true; ui.modal = null; toast("🧪 Cheats enabled"); commit(); break;
     case "nextsame": ui.modal = null; doSwap(ui.lastTheme); break;
