@@ -1,0 +1,22 @@
+{
+  "name": "hatchquest",
+  "version": "1.0.0",
+  "description": "A habit tracker and homework planner where your progress hatches magical creatures.",
+  "main": "main.js",
+  "author": "Angelina",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win portable"
+  },
+  "devDependencies": {
+    "electron": "^31.7.7",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.hatchquest.app",
+    "productName": "HatchQuest",
+    "files": ["index.html", "styles.css", "app.js", "data.js", "main.js", "fonts/**", "art/**"],
+    "win": { "target": "portable" }
+  }
+}
